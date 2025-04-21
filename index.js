@@ -33,7 +33,23 @@ app.get("/", (req, res) => {
 // /api/triage
 app.post("/api/triage", async (req, res) => {
   try {
+    console.log("📩 /api/triage request body:", req.body); // log incoming data
     const { alert } = req.body;
+    if (!alert) throw new Error("❌ Missing 'alert' in request body");
+    
+    const prompt = `You are a SOC analyst. Summarize this alert and suggest next steps:\n\n${alert}`;
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    res.json({ result: response.choices[0].message.content });
+  } catch (err) {
+    console.error("❌ /api/triage error:", err);
+    res.status(500).json({ error: err.message || "Something went wrong." });
+  }
+});
+
     const prompt = `You are a SOC analyst. Summarize this alert and suggest next steps:\n\n${alert}`;
     const response = await openai.chat.completions.create({
       model: "gpt-4",
