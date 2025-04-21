@@ -10,48 +10,82 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(bodyParser.json());
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
+// Test route for Render
+app.get("/", (req, res) => {
+  res.send("✅ Third Space backend is running!");
+});
+
+// Alert triage endpoint
 app.post("/api/triage", async (req, res) => {
-  const { alert } = req.body;
-  const prompt = `You are a SOC analyst. Summarize this alert and suggest next steps:\n\n${alert}`;
-  const response = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-  });
-  res.json({ result: response.choices[0].message.content });
+  try {
+    const { alert } = req.body;
+    const prompt = `You are a SOC analyst. Summarize this alert and suggest next steps:\n\n${alert}`;
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+    res.json({ result: response.choices[0].message.content });
+  } catch (err) {
+    console.error("❌ /api/triage error:", err);
+    res.status(500).json({ error: "Something went wrong." });
+  }
 });
 
+// Threat intelligence endpoint
 app.post("/api/threat-intel", async (req, res) => {
-  const { keyword } = req.body;
-  const prompt = `Give a concise threat intelligence summary about: ${keyword}`;
-  const response = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-  });
-  res.json({ result: response.choices[0].message.content });
+  try {
+    const { keyword } = req.body;
+    const prompt = `Provide a threat intelligence summary about: ${keyword}`;
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+    res.json({ result: response.choices[0].message.content });
+  } catch (err) {
+    console.error("❌ /api/threat-intel error:", err);
+    res.status(500).json({ error: "Something went wrong." });
+  }
 });
 
+// Ticket generation endpoint
 app.post("/api/ticket", async (req, res) => {
-  const { incident } = req.body;
-  const prompt = `Generate a service ticket for this incident:\n\n${incident}`;
-  const response = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-  });
-  res.json({ result: response.choices[0].message.content });
+  try {
+    const { incident } = req.body;
+    const prompt = `Create a helpdesk ticket description based on this incident:\n\n${incident}`;
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+    res.json({ result: response.choices[0].message.content });
+  } catch (err) {
+    console.error("❌ /api/ticket error:", err);
+    res.status(500).json({ error: "Something went wrong." });
+  }
 });
 
+// Knowledge base Q&A endpoint
 app.post("/api/kb", async (req, res) => {
-  const { question } = req.body;
-  const prompt = `You are an internal knowledge base assistant. Answer this:\n\n${question}`;
-  const response = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-  });
-  res.json({ result: response.choices[0].message.content });
+  try {
+    const { question } = req.body;
+    const prompt = `You are an internal cybersecurity knowledge base assistant. Answer this question:\n\n${question}`;
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+    res.json({ result: response.choices[0].message.content });
+  } catch (err) {
+    console.error("❌ /api/kb error:", err);
+    res.status(500).json({ error: "Something went wrong." });
+  }
 });
 
+// Start the server
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(`✅ Server running on port ${port}`);
 });
+
