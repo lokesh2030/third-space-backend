@@ -1,10 +1,12 @@
-console.log("🚀 Starting Third Space backend...");
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import dotenv from "dotenv";
+import { OpenAI } from "openai";
 
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-const { OpenAI } = require("openai");
-require("dotenv").config();
+dotenv.config();
+
+console.log("🚀 Starting Third Space backend...");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -12,7 +14,6 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Initialize OpenAI
 let openai;
 try {
   if (!process.env.OPENAI_API_KEY) {
@@ -24,12 +25,12 @@ try {
   process.exit(1);
 }
 
-// Test route for Render
+// Test route
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running!");
 });
 
-// Alert triage endpoint
+// /api/triage
 app.post("/api/triage", async (req, res) => {
   try {
     const { alert } = req.body;
@@ -45,7 +46,7 @@ app.post("/api/triage", async (req, res) => {
   }
 });
 
-// Threat intelligence endpoint
+// /api/threat-intel
 app.post("/api/threat-intel", async (req, res) => {
   try {
     const { keyword } = req.body;
@@ -61,7 +62,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// Ticket generation endpoint
+// /api/ticket
 app.post("/api/ticket", async (req, res) => {
   try {
     const { incident } = req.body;
@@ -77,7 +78,7 @@ app.post("/api/ticket", async (req, res) => {
   }
 });
 
-// Knowledge base Q&A endpoint
+// /api/kb
 app.post("/api/kb", async (req, res) => {
   try {
     const { question } = req.body;
@@ -93,8 +94,6 @@ app.post("/api/kb", async (req, res) => {
   }
 });
 
-// Start the server
 app.listen(port, () => {
   console.log(`✅ Server running on port ${port}`);
 });
-
