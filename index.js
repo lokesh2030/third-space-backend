@@ -1,3 +1,5 @@
+console.log("🚀 Starting Third Space backend...");
+
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -11,9 +13,16 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openai;
+try {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Missing OpenAI API key");
+  }
+  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+} catch (err) {
+  console.error("❌ Failed to initialize OpenAI:", err.message);
+  process.exit(1);
+}
 
 // Test route for Render
 app.get("/", (req, res) => {
