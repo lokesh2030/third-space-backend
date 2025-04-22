@@ -52,21 +52,44 @@ Provide a short, clear analysis explaining:
   }
 });
 
-// 🧠 THREAT INTEL (Static)
+// 📚 KNOWLEDGE BASE (GPT-4 powered)
+app.post("/api/kb", async (req, res) => {
+  const { question } = req.body;
+  console.log("📚 KB received question:", question);
+
+  if (!question || question.trim() === "") {
+    return res.status(400).json({ result: "Please enter a valid question." });
+  }
+
+  const prompt = `
+You are a cybersecurity assistant helping SOC analysts. Provide a concise, clear answer to this question:
+
+"${question}"
+
+If the question is too vague, give a general overview and suggest more specific questions the user can ask.
+`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const reply = completion.choices[0].message.content.trim();
+    console.log("✅ KB AI response complete.");
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ KB AI error:", err.message);
+    res.status(500).json({ result: "AI failed to answer the question." });
+  }
+});
+
+// 🧠 THREAT INTEL (Static - by request)
 app.post("/api/threat-intel", (req, res) => {
   const { keyword } = req.body;
   console.log("🧠 Threat Intel (static) keyword:", keyword);
 
   const result = `🧠 Threat Intel: No critical IOCs found related to "${keyword}".`;
-  res.json({ result });
-});
-
-// 📚 KNOWLEDGE BASE (Static)
-app.post("/api/kb", (req, res) => {
-  const { question } = req.body;
-  console.log("📚 KB Question:", question);
-
-  const result = `🧠 KB Answer: That's a great question about "${question}". More details coming soon.`;
   res.json({ result });
 });
 
