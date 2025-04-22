@@ -93,21 +93,36 @@ app.post("/api/threat-intel", (req, res) => {
   res.json({ result });
 });
 
-// 🎫 TICKET (Static)
-app.post("/api/ticket", (req, res) => {
+// 🎫 TICKET (GPT-powered)
+app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
+  console.log("🎫 Ticket request received:", incident);
 
-  const emailResponse = `
-To: soc@thirdspace.ai
-Subject: Incident Ticket - New Alert
+  if (!incident || incident.trim() === "") {
+    return res.status(400).json({ result: "Incident description is missing." });
+  }
 
-Body:
-A new incident has been reported: "${incident}".
+  const prompt = `
+You are a SOC automation assistant. Convert the following incident into a professional ticket email for the SOC queue:
 
-This ticket has been logged and assigned to the SOC queue.
+"${incident}"
+
+Make it short, clear, and actionable. Include a subject line and message body.
 `;
 
-  res.json({ result: emailResponse.trim() });
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const reply = completion.choices[0].message.content.trim();
+    console.log("✅ Ticket created.");
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ Ticket AI error:", err.message);
+    res.status(500).json({ result: "AI failed to create a ticket." });
+  }
 });
 
 // 🚀 Start Server
