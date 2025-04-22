@@ -4,20 +4,28 @@ const OpenAI = require("openai");
 require("dotenv").config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-// Setup OpenAI client
+// ✅ Middleware
+app.use(cors());
+app.use(express.json()); // THIS is critical to parse incoming JSON
+
+// ✅ OpenAI setup
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Root check
+// ✅ Health check
 app.get("/", (req, res) => {
-  res.send("✅ Third Space backend is running");
+  res.send("✅ Third Space backend is live.");
 });
 
-// 🔍 TRIAGE
+// ✅ TEST endpoint — to confirm body parsing
+app.post("/api/test-body", (req, res) => {
+  console.log("🧪 TEST BODY RECEIVED:", req.body);
+  res.json({ received: req.body });
+});
+
+// ✅ Triage
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
 
@@ -27,7 +35,7 @@ You are a SOC analyst. Analyze the following alert:
 "${alert}"
 
 Respond with a brief analysis of what this alert might indicate, how critical it may be, and what the first investigative step should be.
-`;
+  `;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -35,23 +43,22 @@ Respond with a brief analysis of what this alert might indicate, how critical it
       messages: [{ role: "user", content: prompt }],
     });
 
-    const reply = completion.choices[0].message.content;
-    res.json({ response: reply });
+    res.json({ response: completion.choices[0].message.content });
   } catch (err) {
-    console.error("Triage AI Error:", err.message);
+    console.error("Triage error:", err);
     res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
-// 📚 KNOWLEDGE BASE
+// ✅ Knowledge Base
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
 
   const prompt = `
-You are a cybersecurity assistant. Answer the following question clearly and concisely:
+You are a cybersecurity assistant. Answer this question clearly and concisely for a SOC analyst:
 
 "${question}"
-`;
+  `;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -59,26 +66,26 @@ You are a cybersecurity assistant. Answer the following question clearly and con
       messages: [{ role: "user", content: prompt }],
     });
 
-    const reply = completion.choices[0].message.content;
-    res.json({ response: reply });
+    res.json({ response: completion.choices[0].message.content });
   } catch (err) {
-    console.error("KB AI Error:", err.message);
+    console.error("KB error:", err);
     res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
-// 🧠 THREAT INTEL
+// ✅ Threat Intel
 app.post("/api/threat-intel", async (req, res) => {
+  console.log("📥 Raw body received:", req.body); // ⬅️ Log what was received
   const { query } = req.body;
-  console.log("🛠️ Received threat intel query:", query);
+  console.log("🛠️ Extracted query:", query);
 
   const prompt = `
-You are a cyber threat intelligence analyst. Provide a concise threat intelligence summary for the keyword:
+You are a cyber threat intelligence analyst. Provide a concise threat intelligence summary for:
 
 "${query}"
 
-Include known IOCs, threat actor associations, and tactics, techniques, or procedures (TTPs) if relevant.
-`;
+Include known IOCs, threat actor associations, and TTPs if applicable.
+  `;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -86,33 +93,32 @@ Include known IOCs, threat actor associations, and tactics, techniques, or proce
       messages: [{ role: "user", content: prompt }],
     });
 
-    const reply = completion.choices[0].message.content;
-    res.json({ response: reply });
+    res.json({ response: completion.choices[0].message.content });
   } catch (err) {
-    console.error("Threat Intel AI Error:", err.message);
+    console.error("Threat Intel error:", err);
     res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
-// 🎫 TICKET (static example)
+// ✅ Ticket
 app.post("/api/ticket", (req, res) => {
   const { incident } = req.body;
 
-  const emailResponse = `
+  const email = `
 To: soc@thirdspace.ai
 Subject: Incident Ticket - New Alert
 
 Body:
-A new incident has been reported: "${incident}".
+A new incident has been reported: "${incident}"
 
 This ticket has been logged and assigned to the SOC queue.
-`;
+  `.trim();
 
-  res.json({ response: emailResponse.trim() });
+  res.json({ response: email });
 });
 
-// Start server
+// ✅ Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`✅ Third Space backend running on port ${PORT}`);
+  console.log(`✅ Backend running on port ${PORT}`);
 });
