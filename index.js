@@ -1,57 +1,29 @@
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// 🔁 Health check
-app.get("/", (req, res) => {
-  res.send("✅ Third Space backend is running");
-});
-
-// 🔍 TRIAGE (dummy)
-app.post("/api/triage", (req, res) => {
+app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
-  const result = `🔍 Triage Analysis: The alert "${alert}" has been reviewed. Risk level: Medium. Further investigation recommended.`;
-  res.json({ result });
-});
+  console.log("🟢 TRIAGE received alert:", alert);
 
-// 📚 KNOWLEDGE BASE (dummy)
-app.post("/api/kb", (req, res) => {
-  const { question } = req.body;
-  const result = `🧠 KB Answer: That's a great question about "${question}". We'll add more detailed info in the future.`;
-  res.json({ result });
-});
+  const prompt = `
+You are a senior SOC analyst. Analyze the following alert:
 
-// 🧠 THREAT INTEL (static)
-app.post("/api/threat-intel", (req, res) => {
-  const { keyword } = req.body;
-  console.log("Static Threat Intel received:", keyword);
-  const result = `🧠 Threat Intel: No critical IOCs found related to "${keyword}".`;
-  res.json({ result });
-});
+"${alert}"
 
-// 🎫 TICKET (static)
-app.post("/api/ticket", (req, res) => {
-  const { incident } = req.body;
-
-  const emailResponse = `
-To: soc@thirdspace.ai
-Subject: Incident Ticket - New Alert
-
-Body:
-A new incident has been reported: "${incident}".
-
-This ticket has been logged and assigned to the SOC queue.
+Provide a short, clear analysis explaining:
+1. What the alert likely means
+2. How critical it is (Low, Medium, High)
+3. What the SOC team should do first
 `;
 
-  res.json({ result: emailResponse.trim() });
-});
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
 
-// Start server
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`✅ Backend running on port ${PORT}`);
+    const reply = completion.choices[0].message.content.trim();
+    console.log("✅ TRIAGE AI responded.");
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ TRIAGE AI error:", err.message);
+    res.status(500).json({ result: "AI failed to analyze the alert." });
+  }
 });
