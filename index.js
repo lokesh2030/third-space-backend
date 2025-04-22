@@ -7,17 +7,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Setup OpenAI client with your Render env key
+// Setup OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Root
+// Root check
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
 
-// 🔍 TRIAGE (with GPT-4)
+// 🔍 TRIAGE
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
 
@@ -36,19 +36,19 @@ Respond with a brief analysis of what this alert might indicate, how critical it
     });
 
     const reply = completion.choices[0].message.content;
-    res.json({ response: reply }); // ✅ unified response key
+    res.json({ response: reply });
   } catch (err) {
     console.error("Triage AI Error:", err.message);
     res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
-// 📚 KNOWLEDGE BASE (with GPT-4)
+// 📚 KNOWLEDGE BASE
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
 
   const prompt = `
-You are a cybersecurity assistant. Answer the following security question clearly and concisely for a SOC analyst:
+You are a cybersecurity assistant. Answer the following question clearly and concisely:
 
 "${question}"
 `;
@@ -60,24 +60,24 @@ You are a cybersecurity assistant. Answer the following security question clearl
     });
 
     const reply = completion.choices[0].message.content;
-    res.json({ response: reply }); // ✅ unified response key
+    res.json({ response: reply });
   } catch (err) {
     console.error("KB AI Error:", err.message);
     res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
-// 🧠 THREAT INTEL (GPT-4 powered)
+// 🧠 THREAT INTEL
 app.post("/api/threat-intel", async (req, res) => {
   const { query } = req.body;
-  console.log("Received threat intel query:", query); // Debug
+  console.log("🛠️ Received threat intel query:", query);
 
   const prompt = `
 You are a cyber threat intelligence analyst. Provide a concise threat intelligence summary for the keyword:
 
 "${query}"
 
-Include any known IOCs, threat actor associations, and tactics, techniques, or procedures (TTPs) if relevant.
+Include known IOCs, threat actor associations, and tactics, techniques, or procedures (TTPs) if relevant.
 `;
 
   try {
@@ -87,14 +87,14 @@ Include any known IOCs, threat actor associations, and tactics, techniques, or p
     });
 
     const reply = completion.choices[0].message.content;
-    res.json({ response: reply }); // ✅ unified response key
+    res.json({ response: reply });
   } catch (err) {
     console.error("Threat Intel AI Error:", err.message);
     res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
-// 🎫 TICKET (email-style)
+// 🎫 TICKET (static example)
 app.post("/api/ticket", (req, res) => {
   const { incident } = req.body;
 
@@ -108,7 +108,7 @@ A new incident has been reported: "${incident}".
 This ticket has been logged and assigned to the SOC queue.
 `;
 
-  res.json({ response: emailResponse.trim() }); // ✅ unified response key
+  res.json({ response: emailResponse.trim() });
 });
 
 // Start server
