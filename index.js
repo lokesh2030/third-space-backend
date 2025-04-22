@@ -5,7 +5,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Root route to confirm backend is running
+// Root health check route
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
@@ -18,7 +18,7 @@ app.post("/api/triage", (req, res) => {
   });
 });
 
-// Threat Intelligence route
+// Threat Intel route
 app.post("/api/threat-intel", (req, res) => {
   const { keyword } = req.body;
   res.json({
@@ -26,12 +26,21 @@ app.post("/api/threat-intel", (req, res) => {
   });
 });
 
-// Ticketing route
+// Ticketing route (email-style output)
 app.post("/api/ticket", (req, res) => {
   const { incident } = req.body;
-  res.json({
-    result: `🎫 Ticketing: Incident "${incident}" has been submitted to the SOC queue.`,
-  });
+
+  const emailResponse = `
+To: soc@thirdspace.ai
+Subject: Incident Ticket - New Alert
+
+Body:
+A new incident has been reported: "${incident}".
+
+This ticket has been logged and assigned to the SOC queue.
+`;
+
+  res.json({ result: emailResponse.trim() });
 });
 
 // Knowledge Base route
@@ -47,4 +56,5 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
 });
+
 
