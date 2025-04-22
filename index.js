@@ -36,10 +36,10 @@ Respond with a brief analysis of what this alert might indicate, how critical it
     });
 
     const reply = completion.choices[0].message.content;
-    res.json({ result: reply });
+    res.json({ response: reply }); // ✅ unified response key
   } catch (err) {
     console.error("Triage AI Error:", err.message);
-    res.status(500).json({ result: "AI failed to respond." });
+    res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
@@ -60,16 +60,17 @@ You are a cybersecurity assistant. Answer the following security question clearl
     });
 
     const reply = completion.choices[0].message.content;
-    res.json({ result: reply });
+    res.json({ response: reply }); // ✅ unified response key
   } catch (err) {
     console.error("KB AI Error:", err.message);
-    res.status(500).json({ result: "AI failed to respond." });
+    res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
 // 🧠 THREAT INTEL (GPT-4 powered)
 app.post("/api/threat-intel", async (req, res) => {
   const { query } = req.body;
+  console.log("Received threat intel query:", query); // Debug
 
   const prompt = `
 You are a cyber threat intelligence analyst. Provide a concise threat intelligence summary for the keyword:
@@ -86,10 +87,10 @@ Include any known IOCs, threat actor associations, and tactics, techniques, or p
     });
 
     const reply = completion.choices[0].message.content;
-    res.json({ result: reply });
+    res.json({ response: reply }); // ✅ unified response key
   } catch (err) {
     console.error("Threat Intel AI Error:", err.message);
-    res.status(500).json({ result: "AI failed to respond." });
+    res.status(500).json({ response: "AI failed to respond." });
   }
 });
 
@@ -107,7 +108,7 @@ A new incident has been reported: "${incident}".
 This ticket has been logged and assigned to the SOC queue.
 `;
 
-  res.json({ result: emailResponse.trim() });
+  res.json({ response: emailResponse.trim() }); // ✅ unified response key
 });
 
 // Start server
