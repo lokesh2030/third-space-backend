@@ -12,12 +12,40 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// 🧠 Build Context Prompt function
+function buildContextPrompt({ userInput, currentPage }) {
+  let mission = '';
+
+  if (currentPage === 'Triage') {
+    mission = `Analyze a security alert. Determine its meaning, severity (Low/Medium/High/Critical), and recommend first SOC action.`;
+  } else if (currentPage === 'KnowledgeBase') {
+    mission = `Answer cybersecurity-related questions accurately, concisely, and clearly.`;
+  } else if (currentPage === 'ThreatIntel') {
+    mission = `Summarize threat actors or malware. Extract motivations, techniques, tools, and MITRE ATT&CK mappings. Present in structured format.`;
+  } else if (currentPage === 'Ticketing') {
+    mission = `Convert incident details into a clear, professional security ticket. Include subject and body.`;
+  } else {
+    mission = `Assist the user in cybersecurity operations based on their input.`;
+  }
+
+  return `
+Context:
+- User Role: SOC Analyst
+- Company: Third Space
+- Current Page: ${currentPage}
+- Mission: ${mission}
+
+User Input:
+"${userInput}"
+`;
+}
+
 // ✅ Health Check
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
 
-// 🔍 TRIAGE (GPT-4 powered)
+// 🔍 TRIAGE (GPT-4 powered with Context)
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
   console.log("🟢 TRIAGE received alert:", alert);
@@ -26,21 +54,12 @@ app.post("/api/triage", async (req, res) => {
     return res.status(400).json({ result: "Alert is missing." });
   }
 
-  const prompt = `
-You are a senior SOC analyst. Analyze the following alert:
-
-"${alert}"
-
-Provide a short, clear analysis explaining:
-1. What the alert likely means
-2. How critical it is (Low, Medium, High)
-3. What the SOC team should do first
-`;
+  const contextPrompt = buildContextPrompt({ userInput: alert, currentPage: 'Triage' });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "system", content: contextPrompt }],
     });
 
     const reply = completion.choices[0].message.content.trim();
@@ -52,7 +71,7 @@ Provide a short, clear analysis explaining:
   }
 });
 
-// 📚 KNOWLEDGE BASE (GPT-4 powered)
+// 📚 KNOWLEDGE BASE (GPT-4 powered with Context)
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
   console.log("📚 KB received question:", question);
@@ -61,18 +80,12 @@ app.post("/api/kb", async (req, res) => {
     return res.status(400).json({ result: "Please enter a valid question." });
   }
 
-  const prompt = `
-You are a cybersecurity assistant helping SOC analysts. Provide a concise, clear answer to this question:
-
-"${question}"
-
-If the question is too vague, give a general overview and suggest more specific questions the user can ask.
-`;
+  const contextPrompt = buildContextPrompt({ userInput: question, currentPage: 'KnowledgeBase' });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "system", content: contextPrompt }],
     });
 
     const reply = completion.choices[0].message.content.trim();
@@ -84,7 +97,7 @@ If the question is too vague, give a general overview and suggest more specific 
   }
 });
 
-// 🧠 THREAT INTEL (GPT-4 powered NOW)
+// 🧠 THREAT INTEL (GPT-4 powered with Context)
 app.post("/api/threat-intel", async (req, res) => {
   const { keyword } = req.body;
   console.log("🧠 Threat Intel received keyword:", keyword);
@@ -93,31 +106,12 @@ app.post("/api/threat-intel", async (req, res) => {
     return res.status(400).json({ result: "Keyword is missing." });
   }
 
-  const prompt = `
-You are a Threat Intelligence Assistant. Your job is to:
-- Identify threat actors, malware, or campaigns related to the keyword
-- Summarize their motivations and attack techniques
-- List known malware/tools they use
-- Reference MITRE ATT&CK techniques if possible
-
-Format your response like this:
----
-Threat Actor: [Name]
-Motivation: [Financial gain, espionage, etc.]
-Primary Techniques: [List techniques]
-Known Tools: [List malware/tools]
-Relevant MITRE Techniques: [Txxxx]
----
-
-Keyword to analyze: "${keyword}"
-
-Respond clearly and professionally.
-`;
+  const contextPrompt = buildContextPrompt({ userInput: keyword, currentPage: 'ThreatIntel' });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "system", content: contextPrompt }],
     });
 
     const reply = completion.choices[0].message.content.trim();
@@ -129,7 +123,7 @@ Respond clearly and professionally.
   }
 });
 
-// 🎫 TICKET (GPT-powered)
+// 🎫 TICKET (GPT-4 powered with Context)
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
   console.log("🎫 Ticket request received:", incident);
@@ -138,22 +132,16 @@ app.post("/api/ticket", async (req, res) => {
     return res.status(400).json({ result: "Incident description is missing." });
   }
 
-  const prompt = `
-You are a SOC automation assistant. Convert the following incident into a professional ticket email for the SOC queue:
-
-"${incident}"
-
-Make it short, clear, and actionable. Include a subject line and message body.
-`;
+  const contextPrompt = buildContextPrompt({ userInput: incident, currentPage: 'Ticketing' });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "system", content: contextPrompt }],
     });
 
     const reply = completion.choices[0].message.content.trim();
-    console.log("✅ Ticket created.");
+    console.log("✅ Ticket AI response complete.");
     res.json({ result: reply });
   } catch (err) {
     console.error("❌ Ticket AI error:", err.message);
