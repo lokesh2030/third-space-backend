@@ -123,7 +123,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// 🎫 TICKET (GPT-4 powered with Context)
+// 🎫 TICKET (GPT-3.5-Turbo powered with Context) ✅ UPDATED
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
   console.log("🎫 Ticket request received:", incident);
@@ -136,8 +136,10 @@ app.post("/api/ticket", async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo", // ✅ moved to 3.5 turbo
       messages: [{ role: "system", content: contextPrompt }],
+      temperature: 0.2, // ✅ lower temperature = faster and more deterministic
+      max_tokens: 500, // ✅ smaller size = faster response
     });
 
     const reply = completion.choices[0].message.content.trim();
