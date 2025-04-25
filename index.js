@@ -84,13 +84,49 @@ If the question is too vague, give a general overview and suggest more specific 
   }
 });
 
-// 🧠 THREAT INTEL (Static - by request)
-app.post("/api/threat-intel", (req, res) => {
+// 🧠 THREAT INTEL (GPT-4 powered NOW)
+app.post("/api/threat-intel", async (req, res) => {
   const { keyword } = req.body;
-  console.log("🧠 Threat Intel (static) keyword:", keyword);
+  console.log("🧠 Threat Intel received keyword:", keyword);
 
-  const result = `🧠 Threat Intel: No critical IOCs found related to "${keyword}".`;
-  res.json({ result });
+  if (!keyword || keyword.trim() === "") {
+    return res.status(400).json({ result: "Keyword is missing." });
+  }
+
+  const prompt = `
+You are a Threat Intelligence Assistant. Your job is to:
+- Identify threat actors, malware, or campaigns related to the keyword
+- Summarize their motivations and attack techniques
+- List known malware/tools they use
+- Reference MITRE ATT&CK techniques if possible
+
+Format your response like this:
+---
+Threat Actor: [Name]
+Motivation: [Financial gain, espionage, etc.]
+Primary Techniques: [List techniques]
+Known Tools: [List malware/tools]
+Relevant MITRE Techniques: [Txxxx]
+---
+
+Keyword to analyze: "${keyword}"
+
+Respond clearly and professionally.
+`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const reply = completion.choices[0].message.content.trim();
+    console.log("✅ Threat Intel AI response complete.");
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ Threat Intel AI error:", err.message);
+    res.status(500).json({ result: "AI failed to fetch threat intel." });
+  }
 });
 
 // 🎫 TICKET (GPT-powered)
