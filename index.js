@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 require("dotenv").config();
+const mongoose = require("mongoose");
 
 const app = express();
 app.use(cors());
@@ -11,6 +12,40 @@ app.use(express.json());
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// 🔍 Setup MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// 🛡️ Import Alerts Model
+const { Alert } = require("./models/Alert");
+
+// 🛡️ Utility: Extract URLs
+function extractUrls(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
+}
+
+// 🛡️ Utility: Scan URL with VirusTotal
+const axios = require("axios");
+async function scanUrlWithVirusTotal(url) {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  const encodedUrl = Buffer.from(url).toString('base64url');
+  const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
+
+  const response = await axios.get(vtUrl, {
+    headers: { 'x-apikey': apiKey }
+  });
+
+  const data = response.data.data;
+  const maliciousVotes = data.attributes.last_analysis_stats.malicious;
+
+  return {
+    isPhishing: maliciousVotes > 0,
+    threatLevel: maliciousVotes > 5 ? 'High' : 'Medium'
+  };
+}
 
 // 🧠 Build Context Prompt function
 function buildContextPrompt({ userInput, currentPage }) {
@@ -45,7 +80,45 @@ app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
 
-// 🔍 TRIAGE (GPT-4 powered with Context)
+// 🔍 API: Ingest New Alert + Detect Phishing
+app.post("/api/alerts", async (req, res) => {
+  const { text, source } = req.body;
+
+  if (!text || text.trim() === "") {
+    return res.status(400).json({ message: "Alert text is missing." });
+  }
+
+  try {
+    const urls = extractUrls(text);
+    const phishingResults = [];
+
+    for (const url of urls) {
+      const result = await scanUrlWithVirusTotal(url);
+      if (result.isPhishing) {
+        phishingResults.push({
+          url: url,
+          score: result.threatLevel,
+          source: 'VirusTotal'
+        });
+      }
+    }
+
+    const newAlert = new Alert({
+      text,
+      source,
+      phishing_detected: phishingResults.length > 0,
+      phishing_details: phishingResults
+    });
+
+    await newAlert.save();
+    res.status(201).json(newAlert);
+  } catch (error) {
+    console.error('❌ Failed to ingest alert:', error.message);
+    res.status(500).json({ message: "Failed to create alert." });
+  }
+});
+
+// 🧠 TRIAGE (GPT-4 powered with Context)
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
   console.log("🟢 TRIAGE received alert:", alert);
@@ -123,7 +196,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// 🎫 TICKET (GPT-3.5-Turbo powered with Context) ✅ UPDATED
+// 🎫 TICKET (GPT-3.5-Turbo powered with Context)
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
   console.log("🎫 Ticket request received:", incident);
@@ -136,10 +209,10 @@ app.post("/api/ticket", async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // ✅ moved to 3.5 turbo
+      model: "gpt-3.5-turbo",
       messages: [{ role: "system", content: contextPrompt }],
-      temperature: 0.2, // ✅ lower temperature = faster and more deterministic
-      max_tokens: 500, // ✅ smaller size = faster response
+      temperature: 0.2,
+      max_tokens: 500,
     });
 
     const reply = completion.choices[0].message.content.trim();
