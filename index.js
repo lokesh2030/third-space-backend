@@ -1,10 +1,19 @@
+// index.js
+
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 require("dotenv").config();
 const mongoose = require("mongoose");
+const axios = require("axios");
+
+// 🛡️ Import Models and Routes
+const { Alert } = require("./models/Alert");
+const phishingRoute = require("./routes/phishingRoute"); // NEW: Phishing detection route
 
 const app = express();
+
+// 🛡️ Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -18,8 +27,8 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// 🛡️ Import Alerts Model
-const { Alert } = require("./models/Alert");
+// ➡️ Setup Routes
+app.use('/api', phishingRoute);
 
 // 🛡️ Utility: Extract URLs
 function extractUrls(text) {
@@ -28,7 +37,6 @@ function extractUrls(text) {
 }
 
 // 🛡️ Utility: Scan URL with VirusTotal
-const axios = require("axios");
 async function scanUrlWithVirusTotal(url) {
   const apiKey = process.env.VIRUSTOTAL_API_KEY;
   const encodedUrl = Buffer.from(url).toString('base64url');
@@ -75,12 +83,12 @@ User Input:
 `;
 }
 
-// ✅ Health Check
+// ✅ Health Check Endpoint
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
 
-// 🔍 API: Ingest New Alert + Detect Phishing
+// 🔍 API: Ingest New Alert + Detect Phishing with VirusTotal
 app.post("/api/alerts", async (req, res) => {
   const { text, source } = req.body;
 
@@ -118,7 +126,7 @@ app.post("/api/alerts", async (req, res) => {
   }
 });
 
-// 🧠 TRIAGE (GPT-4 powered with Context)
+// 🧠 TRIAGE (GPT-4 powered)
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
   console.log("🟢 TRIAGE received alert:", alert);
@@ -144,7 +152,7 @@ app.post("/api/triage", async (req, res) => {
   }
 });
 
-// 📚 KNOWLEDGE BASE (GPT-4 powered with Context)
+// 📚 KNOWLEDGE BASE (GPT-4 powered)
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
   console.log("📚 KB received question:", question);
@@ -170,7 +178,7 @@ app.post("/api/kb", async (req, res) => {
   }
 });
 
-// 🧠 THREAT INTEL (GPT-4 powered with Context)
+// 🧠 THREAT INTEL (GPT-4 powered)
 app.post("/api/threat-intel", async (req, res) => {
   const { keyword } = req.body;
   console.log("🧠 Threat Intel received keyword:", keyword);
@@ -196,7 +204,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// 🎫 TICKET (GPT-3.5-Turbo powered with Context)
+// 🎫 TICKET (GPT-3.5 powered)
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
   console.log("🎫 Ticket request received:", incident);
