@@ -28,7 +28,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // ➡️ Setup Routes
-app.use('/api', phishingRoute);
+app.use('/api/phishing-detect', phishingRoute);
 
 // 🛡️ Utility: Extract URLs
 function extractUrls(text) {
