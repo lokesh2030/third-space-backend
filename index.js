@@ -9,7 +9,8 @@ const axios = require("axios");
 
 // 🛡️ Import Models and Routes
 const { Alert } = require("./models/Alert");
-const phishingRoute = require("./routes/phishing"); // NEW: Phishing detection route
+const phishingRoute = require("./routes/phishing");
+const metricsRoute = require("./routes/metrics"); // NEW: metrics logging
 
 const app = express();
 
@@ -29,6 +30,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 // ➡️ Setup Routes
 app.use('/api/phishing-detect', phishingRoute);
+app.use('/api/metrics', metricsRoute); // ⬅️ add metrics route
 
 // 🛡️ Utility: Extract URLs
 function extractUrls(text) {
