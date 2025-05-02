@@ -10,7 +10,7 @@ const axios = require("axios");
 // 🛡️ Import Models and Routes
 const { Alert } = require("./models/Alert");
 const phishingRoute = require("./routes/phishing");
-const metricsRoute = require("./routes/metrics"); // NEW: metrics logging
+const metricsRoute = require("./routes/metrics");
 
 const app = express();
 
@@ -30,7 +30,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 // ➡️ Setup Routes
 app.use('/api/phishing-detect', phishingRoute);
-app.use('/api/metrics', metricsRoute); // ⬅️ add metrics route
+app.use('/api/metrics', metricsRoute);
 
 // 🛡️ Utility: Extract URLs
 function extractUrls(text) {
@@ -128,7 +128,7 @@ app.post("/api/alerts", async (req, res) => {
   }
 });
 
-// 🧠 TRIAGE (GPT-4 powered)
+// 🧠 TRIAGE (GPT-3.5-turbo powered)
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
   console.log("🟢 TRIAGE received alert:", alert);
@@ -141,8 +141,10 @@ app.post("/api/triage", async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{ role: "system", content: contextPrompt }],
+      temperature: 0.3,
+      max_tokens: 600,
     });
 
     const reply = completion.choices[0].message.content.trim();
