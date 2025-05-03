@@ -10,6 +10,7 @@ const axios = require("axios");
 // 🛡️ Import Models and Routes
 const { Alert } = require("./models/Alert");
 const phishingRoute = require("./routes/phishing");
+app.use('/api/phishing-detect', phishingRoute);
 const metricsRoute = require("./routes/metrics");
 
 const app = express();
