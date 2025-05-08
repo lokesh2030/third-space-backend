@@ -1,5 +1,3 @@
-// index.js
-
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
@@ -7,46 +5,50 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const axios = require("axios");
 
-// 🛡️ Import Models and Routes
-const { Alert } = require("./models/Alert");
-const phishingRoute = require("./routes/phishing");
-app.use('/api/phishing-detect', phishingRoute);
-const metricsRoute = require("./routes/metrics");
-
 const app = express();
 
-// 🛡️ Middleware
+// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// 🔐 Setup OpenAI client
+// ✅ MongoDB
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
+
+// ✅ OpenAI Setup
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🔍 Setup MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+// ✅ Routes
+const phishingRoute = require("./routes/phishing");
+const metricsRoute = require("./routes/metrics");
+const remediationRoutes = require("./routes/remediationRoutes");
 
-// ➡️ Setup Routes
-app.use('/api/phishing-detect', phishingRoute);
-app.use('/api/metrics', metricsRoute);
+app.use("/api/phishing-detect", phishingRoute);
+app.use("/api/metrics", metricsRoute);
+app.use("/api/remediation", remediationRoutes);
 
-// 🛡️ Utility: Extract URLs
+// ✅ Health Check
+app.get("/", (req, res) => {
+  res.send("✅ Third Space backend is running");
+});
+
+// ✅ Extract URLs from Alert
 function extractUrls(text) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.match(urlRegex) || [];
 }
 
-// 🛡️ Utility: Scan URL with VirusTotal
+// ✅ VirusTotal Scanner
 async function scanUrlWithVirusTotal(url) {
   const apiKey = process.env.VIRUSTOTAL_API_KEY;
-  const encodedUrl = Buffer.from(url).toString('base64url');
+  const encodedUrl = Buffer.from(url).toString("base64url");
   const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
 
   const response = await axios.get(vtUrl, {
-    headers: { 'x-apikey': apiKey }
+    headers: { "x-apikey": apiKey },
   });
 
   const data = response.data.data;
@@ -54,24 +56,24 @@ async function scanUrlWithVirusTotal(url) {
 
   return {
     isPhishing: maliciousVotes > 0,
-    threatLevel: maliciousVotes > 5 ? 'High' : 'Medium'
+    threatLevel: maliciousVotes > 5 ? "High" : "Medium",
   };
 }
 
-// 🧠 Build Context Prompt function
+// ✅ Prompt Builder
 function buildContextPrompt({ userInput, currentPage }) {
-  let mission = '';
+  let mission = "";
 
-  if (currentPage === 'Triage') {
-    mission = `Analyze a security alert. Determine its meaning, severity (Low/Medium/High/Critical), and recommend first SOC action.`;
-  } else if (currentPage === 'KnowledgeBase') {
-    mission = `Answer cybersecurity-related questions accurately, concisely, and clearly.`;
-  } else if (currentPage === 'ThreatIntel') {
-    mission = `Summarize threat actors or malware. Extract motivations, techniques, tools, and MITRE ATT&CK mappings. Present in structured format.`;
-  } else if (currentPage === 'Ticketing') {
-    mission = `Convert incident details into a clear, professional security ticket. Include subject and body.`;
+  if (currentPage === "Triage") {
+    mission = "Analyze a security alert. Determine its meaning, severity (Low/Medium/High/Critical), and recommend first SOC action.";
+  } else if (currentPage === "KnowledgeBase") {
+    mission = "Answer cybersecurity-related questions accurately, concisely, and clearly.";
+  } else if (currentPage === "ThreatIntel") {
+    mission = "Summarize threat actors or malware. Extract motivations, techniques, tools, and MITRE ATT&CK mappings.";
+  } else if (currentPage === "Ticketing") {
+    mission = "Convert incident details into a clear, professional security ticket. Include subject and body.";
   } else {
-    mission = `Assist the user in cybersecurity operations based on their input.`;
+    mission = "Assist the user in cybersecurity operations based on their input.";
   }
 
   return `
@@ -86,12 +88,10 @@ User Input:
 `;
 }
 
-// ✅ Health Check Endpoint
-app.get("/", (req, res) => {
-  res.send("✅ Third Space backend is running");
-});
+// ✅ Models
+const { Alert } = require("./models/Alert");
 
-// 🔍 API: Ingest New Alert + Detect Phishing with VirusTotal
+// ✅ Ingest Alert + Phishing Detection
 app.post("/api/alerts", async (req, res) => {
   const { text, source } = req.body;
 
@@ -109,7 +109,7 @@ app.post("/api/alerts", async (req, res) => {
         phishingResults.push({
           url: url,
           score: result.threatLevel,
-          source: 'VirusTotal'
+          source: "VirusTotal",
         });
       }
     }
@@ -118,18 +118,18 @@ app.post("/api/alerts", async (req, res) => {
       text,
       source,
       phishing_detected: phishingResults.length > 0,
-      phishing_details: phishingResults
+      phishing_details: phishingResults,
     });
 
     await newAlert.save();
     res.status(201).json(newAlert);
   } catch (error) {
-    console.error('❌ Failed to ingest alert:', error.message);
+    console.error("❌ Failed to ingest alert:", error.message);
     res.status(500).json({ message: "Failed to create alert." });
   }
 });
 
-// 🧠 TRIAGE (GPT-3.5-turbo powered)
+// ✅ TRIAGE
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
   console.log("🟢 TRIAGE received alert:", alert);
@@ -138,7 +138,7 @@ app.post("/api/triage", async (req, res) => {
     return res.status(400).json({ result: "Alert is missing." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: alert, currentPage: 'Triage' });
+  const contextPrompt = buildContextPrompt({ userInput: alert, currentPage: "Triage" });
 
   try {
     const completion = await openai.chat.completions.create({
@@ -157,7 +157,7 @@ app.post("/api/triage", async (req, res) => {
   }
 });
 
-// 📚 KNOWLEDGE BASE (GPT-4 powered)
+// ✅ KNOWLEDGE BASE
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
   console.log("📚 KB received question:", question);
@@ -166,7 +166,7 @@ app.post("/api/kb", async (req, res) => {
     return res.status(400).json({ result: "Please enter a valid question." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: question, currentPage: 'KnowledgeBase' });
+  const contextPrompt = buildContextPrompt({ userInput: question, currentPage: "KnowledgeBase" });
 
   try {
     const completion = await openai.chat.completions.create({
@@ -183,7 +183,7 @@ app.post("/api/kb", async (req, res) => {
   }
 });
 
-// 🧠 THREAT INTEL (GPT-4 powered)
+// ✅ THREAT INTEL
 app.post("/api/threat-intel", async (req, res) => {
   const { keyword } = req.body;
   console.log("🧠 Threat Intel received keyword:", keyword);
@@ -192,7 +192,7 @@ app.post("/api/threat-intel", async (req, res) => {
     return res.status(400).json({ result: "Keyword is missing." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: keyword, currentPage: 'ThreatIntel' });
+  const contextPrompt = buildContextPrompt({ userInput: keyword, currentPage: "ThreatIntel" });
 
   try {
     const completion = await openai.chat.completions.create({
@@ -209,7 +209,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// 🎫 TICKET (GPT-3.5 powered)
+// ✅ TICKETING
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
   console.log("🎫 Ticket request received:", incident);
@@ -218,7 +218,7 @@ app.post("/api/ticket", async (req, res) => {
     return res.status(400).json({ result: "Incident description is missing." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: incident, currentPage: 'Ticketing' });
+  const contextPrompt = buildContextPrompt({ userInput: incident, currentPage: "Ticketing" });
 
   try {
     const completion = await openai.chat.completions.create({
@@ -237,7 +237,7 @@ app.post("/api/ticket", async (req, res) => {
   }
 });
 
-// 🚀 Start Server
+// ✅ Start Server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
