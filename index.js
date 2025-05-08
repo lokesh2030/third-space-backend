@@ -1,3 +1,4 @@
+// index.js (updated with dedicated /api/remediation GPT route)
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
@@ -17,15 +18,12 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
 // ✅ OpenAI Setup
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ✅ Routes
 const phishingRoute = require("./routes/phishing");
 const metricsRoute = require("./routes/metrics");
 const remediationRoutes = require("./routes/remediationRoutes");
-
 app.use("/api/phishing-detect", phishingRoute);
 app.use("/api/metrics", metricsRoute);
 app.use("/api/remediation", remediationRoutes);
