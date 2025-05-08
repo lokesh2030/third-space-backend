@@ -1,28 +1,43 @@
-const keywordRouting = (text) => {
-  const lower = text.toLowerCase();
-  if (lower.includes('block') || lower.includes('firewall')) return 'Firewall Team';
-  if (lower.includes('reset password') || lower.includes('account')) return 'IT Team';
-  if (lower.includes('isolate') || lower.includes('scan') || lower.includes('network')) return 'Network Team';
-  return 'Security Team';
-};
+const OpenAI = require("openai");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-exports.getRemediations = async (req, res) => {
-  // TEMPORARY SAMPLE DATA — replace with triage output later
-  const sampleAlerts = [
-    {
-      alert: 'Suspicious login from Russia detected on admin account',
-      action: 'Reset the user password and enable MFA',
-    },
-    {
-      alert: 'Malware beaconing from internal host',
-      action: 'Isolate the host and initiate scan',
-    },
-  ];
+exports.generateRemediation = async (req, res) => {
+  const { alertText } = req.body;
 
-  const result = sampleAlerts.map((entry) => ({
-    ...entry,
-    targetTeam: keywordRouting(entry.action),
-  }));
+  if (!alertText || alertText.trim() === "") {
+    return res.status(400).json({ result: "Missing alert text." });
+  }
 
-  res.json(result);
+  const prompt = `
+You are a security operations co-pilot. Based on the following alert, generate a concise remediation plan.
+
+Alert:
+"${alertText}"
+
+Respond in the following structured format:
+🔧 Remediation Plan:
+1. <Primary remediation action>
+2. <Containment step>
+3. <Additional verification or investigation>
+
+📍 Route to: <IT Team | Security Team | Network Team>
+🧭 SLA: <e.g. 15 minutes, 1 hour, etc.>
+
+Keep it actionable and professional.
+`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "system", content: prompt }],
+      temperature: 0.2,
+      max_tokens: 500,
+    });
+
+    const response = completion.choices[0].message.content.trim();
+    res.json({ result: response });
+  } catch (err) {
+    console.error("❌ GPT error in remediation:", err.message);
+    res.status(500).json({ result: "AI failed to generate remediation plan." });
+  }
 };
