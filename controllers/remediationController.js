@@ -9,21 +9,21 @@ exports.generateRemediation = async (req, res) => {
   }
 
   const prompt = `
-You are a security operations co-pilot. Based on the following alert, generate a concise remediation plan.
+You are a security operations co-pilot. Based on the following alert, generate a concise and professional remediation plan.
 
 Alert:
 "${alertText}"
 
-Respond in the following structured format:
+Respond in this structured format:
 🔧 Remediation Plan:
-1. <Primary remediation action>
-2. <Containment step>
-3. <Additional verification or investigation>
+1. Containment (e.g., quarantine message, block sender)
+2. Technical action (e.g., investigate headers, reset credentials, update filters)
+3. Awareness step (e.g., notify users, educate on phishing/social engineering)
 
 📍 Route to: <IT Team | Security Team | Network Team>
-🧭 SLA: <e.g. 15 minutes, 1 hour, etc.>
+🧭 SLA: <time window>
 
-Keep it actionable and professional.
+Tailor your response to spoofing, impersonation, phishing links, or malware as appropriate. Be concise and use bulletproof security judgment.
 `;
 
   try {
