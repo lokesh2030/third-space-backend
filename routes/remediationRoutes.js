@@ -1,7 +1,7 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { getRemediations } = require('../controllers/remediationController');
+const { generateRemediation } = require("../controllers/remediationController");
 
-router.get('/', getRemediations);
+router.post("/", generateRemediation); // Use POST for generating remediation output
 
 module.exports = router;
