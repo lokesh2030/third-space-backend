@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -7,11 +6,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Only load the working Knowledge Base route
+// ✅ Import all 3 routes
+const triageRoute = require('./routes/triage');
+const threatRoute = require('./routes/threat');
 const kbRoute = require('./routes/kb');
+
+// ✅ Use all routes under /api
+app.use('/api', triageRoute);
+app.use('/api', threatRoute);
 app.use('/api', kbRoute);
 
-// ✅ Optional: Health check route
+// ✅ Optional: test route
 app.get('/api/ping', (req, res) => {
   res.json({ message: 'Server is running' });
 });
