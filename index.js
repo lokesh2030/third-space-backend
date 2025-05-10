@@ -10,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 
 // Optional: MongoDB connection
-// Comment this out if you’re not using Alert ingestion
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
@@ -18,7 +17,6 @@ mongoose.connect(process.env.MONGO_URI)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // === Helper Functions ===
-
 const extractUrls = (text) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.match(urlRegex) || [];
@@ -70,8 +68,6 @@ User Input:
 }
 
 // === Routes ===
-
-// Health check
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
@@ -101,9 +97,11 @@ app.post("/api/triage", async (req, res) => {
   }
 });
 
-// KNOWLEDGE BASE
+// KNOWLEDGE BASE (with debug logging)
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
+  console.log("📚 KB received question:", question);
+
   if (!question || question.trim() === "") {
     return res.status(400).json({ result: "Please enter a valid question." });
   }
@@ -116,7 +114,11 @@ app.post("/api/kb", async (req, res) => {
       messages: [{ role: "system", content: contextPrompt }],
     });
 
-    const reply = completion.choices[0].message.content.trim();
+    console.log("🔁 GPT KB Raw Response:", JSON.stringify(completion, null, 2));
+
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+    if (!reply) throw new Error("No content in GPT response");
+
     res.json({ result: reply });
   } catch (err) {
     console.error("❌ KB AI error:", err.response?.data || err.message);
@@ -176,7 +178,7 @@ app.post("/api/ticket", async (req, res) => {
   }
 });
 
-// === Start Server ===
+// Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
