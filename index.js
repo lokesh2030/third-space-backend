@@ -16,6 +16,9 @@ mongoose.connect(process.env.MONGO_URI)
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// ✅ Load Routes
+const phishingRoute = require("./routes/phishing");
+
 // === Helper Functions ===
 const extractUrls = (text) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -42,6 +45,10 @@ async function scanUrlWithVirusTotal(url) {
 
 // === Routes ===
 
+// ✅ PHISHING DETECTION
+app.use("/api/phishing-detect", phishingRoute);
+
+// ✅ HEALTH CHECK
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
@@ -73,7 +80,7 @@ app.post("/api/triage", async (req, res) => {
   }
 });
 
-// ✅ KNOWLEDGE BASE (Fully Reverted)
+// ✅ KNOWLEDGE BASE
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
 
@@ -95,7 +102,7 @@ app.post("/api/kb", async (req, res) => {
 
     res.json({ result: reply });
   } catch (err) {
-    console.error("❌ KB basic error:", err.message);
+    console.error("❌ KB error:", err.message);
     res.status(500).json({ result: "AI failed to answer your question." });
   }
 });
