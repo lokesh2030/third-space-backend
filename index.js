@@ -1,186 +1,77 @@
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
-require("dotenv").config();
 const mongoose = require("mongoose");
-const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB (optional)
+// ✅ Connect to MongoDB (optional)
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// ✅ Load Routes
-const phishingRoute = require("./routes/phishing");
-
-// === Helper Functions ===
-const extractUrls = (text) => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.match(urlRegex) || [];
-};
-
-async function scanUrlWithVirusTotal(url) {
-  const apiKey = process.env.VIRUSTOTAL_API_KEY;
-  const encodedUrl = Buffer.from(url).toString("base64url");
-  const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
-
-  const response = await axios.get(vtUrl, {
-    headers: { "x-apikey": apiKey },
-  });
-
-  const data = response.data.data;
-  const maliciousVotes = data.attributes.last_analysis_stats.malicious;
-
-  return {
-    isPhishing: maliciousVotes > 0,
-    threatLevel: maliciousVotes > 5 ? "High" : "Medium",
-  };
-}
-
-// === Routes ===
-
-// ✅ PHISHING DETECTION
-app.use("/api/phishing-detect", phishingRoute);
-
-// ✅ HEALTH CHECK
-app.get("/", (req, res) => {
-  res.send("✅ Third Space backend is running");
+// ✅ OpenAI Setup
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ✅ TRIAGE
-app.post("/api/triage", async (req, res) => {
-  const { alert } = req.body;
-  if (!alert || alert.trim() === "") {
-    return res.status(400).json({ result: "Alert is missing." });
-  }
+// ✅ POST /ticket — Generate Professional Incident Ticket
+app.post("/ticket", async (req, res) => {
+  const { subject, body } = req.body;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: alert }],
-      temperature: 0.3,
-      max_tokens: 600,
-    });
+    const prompt = `
+You are a professional SOC analyst assistant. Given a subject and incident description, generate a clean, copy-pasteable incident ticket for use in Jira or ServiceNow.
 
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-    if (!reply) {
-      return res.status(500).json({ result: "No response from AI." });
-    }
+Follow this format exactly:
 
-    res.json({ result: reply });
-  } catch (err) {
-    console.error("❌ TRIAGE error:", err.message);
-    res.status(500).json({ result: "AI failed to analyze the alert." });
-  }
-});
+Subject: <Subject line>
 
-// ✅ KNOWLEDGE BASE
-app.post("/api/kb", async (req, res) => {
-  const { question } = req.body;
+Incident Summary:
+<Professional, concise summary of the incident. 3–5 lines max.>
 
-  if (!question || question.trim() === "") {
-    return res.status(400).json({ result: "Please enter a valid question." });
-  }
+Recommended Remediation Actions:
+1. <Action 1>
+2. <Action 2>
+3. <Action 3>
+4. <Optional Action 4>
 
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: question }],
-    });
+Routing: Security Operations Center (SOC)
+Priority Level: High
+Confidence Level: High
 
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-
-    if (!reply) {
-      return res.status(500).json({ result: "No response from AI." });
-    }
-
-    res.json({ result: reply });
-  } catch (err) {
-    console.error("❌ KB error:", err.message);
-    res.status(500).json({ result: "AI failed to answer your question." });
-  }
-});
-
-// ✅ THREAT INTEL
-app.post("/api/threat-intel", async (req, res) => {
-  const { keyword } = req.body;
-  if (!keyword || keyword.trim() === "") {
-    return res.status(400).json({ result: "Keyword is missing." });
-  }
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: keyword }],
-    });
-
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-    if (!reply) {
-      return res.status(500).json({ result: "No response from AI." });
-    }
-
-    res.json({ result: reply });
-  } catch (err) {
-    console.error("❌ Threat Intel error:", err.message);
-    res.status(500).json({ result: "AI failed to fetch threat intel." });
-  }
-});
-
-// ✅ TICKETING (Triage-style formatting)
-app.post("/api/ticket", async (req, res) => {
-  const { incident } = req.body;
-
-  if (!incident || incident.trim() === "") {
-    return res.status(400).json({ result: "Incident description is missing." });
-  }
-
-  const prompt = `
-You are an AI cybersecurity assistant.
-
-Given the incident description below, return a structured incident ticket in this exact format:
-
-🔍 Result:
-Subject: [Short summary]
-Body:
-[1–2 sentences on what was detected, how, and what the risk is.]
-
-🔧 Remediation Suggestion
-[List 2–3 recommended actions to mitigate or resolve the incident.]
-
-📍 Route to: [Choose from: Security Team, IT Team, Firewall Team, Network Team]
-
-Incident:
-${incident}
+Use clear, technical language suitable for a security analyst. Keep formatting consistent.
 `;
 
-  try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
+      model: "gpt-4",
+      messages: [
+        { role: "system", content: prompt },
+        {
+          role: "user",
+          content: `Subject: ${subject}\n\nDescription: ${body}`,
+        },
+      ],
       temperature: 0.3,
-      max_tokens: 600,
     });
 
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-    if (!reply) {
-      return res.status(500).json({ result: "No response from AI." });
-    }
+    const formattedTicket = completion.choices[0].message.content;
 
-    res.json({ result: reply });
-  } catch (err) {
-    console.error("❌ Ticket error:", err.message);
-    res.status(500).json({ result: "AI failed to generate ticket." });
+    res.json({
+      formattedTicket: formattedTicket  // No backticks for clean paste
+    });
+
+  } catch (error) {
+    console.error("❌ Error generating ticket:", error);
+    res.status(500).json({ error: "Failed to generate ticket" });
   }
 });
 
-// ✅ Start Server
+// ✅ Start the server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`✅ Third Space backend running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
