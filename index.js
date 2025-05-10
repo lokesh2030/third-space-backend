@@ -1,4 +1,3 @@
-// index.js (updated with dedicated /api/remediation GPT route)
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
@@ -7,39 +6,24 @@ const mongoose = require("mongoose");
 const axios = require("axios");
 
 const app = express();
-
-// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB
+// Optional: MongoDB connection
+// Comment this out if you’re not using Alert ingestion
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// ✅ OpenAI Setup
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ✅ Routes
-const phishingRoute = require("./routes/phishing");
-const metricsRoute = require("./routes/metrics");
-const remediationRoutes = require("./routes/remediationRoutes");
-app.use("/api/phishing-detect", phishingRoute);
-app.use("/api/metrics", metricsRoute);
-app.use("/api/remediation", remediationRoutes);
+// === Helper Functions ===
 
-// ✅ Health Check
-app.get("/", (req, res) => {
-  res.send("✅ Third Space backend is running");
-});
-
-// ✅ Extract URLs from Alert
-function extractUrls(text) {
+const extractUrls = (text) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.match(urlRegex) || [];
-}
+};
 
-// ✅ VirusTotal Scanner
 async function scanUrlWithVirusTotal(url) {
   const apiKey = process.env.VIRUSTOTAL_API_KEY;
   const encodedUrl = Buffer.from(url).toString("base64url");
@@ -58,7 +42,6 @@ async function scanUrlWithVirusTotal(url) {
   };
 }
 
-// ✅ Prompt Builder
 function buildContextPrompt({ userInput, currentPage }) {
   let mission = "";
 
@@ -86,52 +69,16 @@ User Input:
 `;
 }
 
-// ✅ Models
-const { Alert } = require("./models/Alert");
+// === Routes ===
 
-// ✅ Ingest Alert + Phishing Detection
-app.post("/api/alerts", async (req, res) => {
-  const { text, source } = req.body;
-
-  if (!text || text.trim() === "") {
-    return res.status(400).json({ message: "Alert text is missing." });
-  }
-
-  try {
-    const urls = extractUrls(text);
-    const phishingResults = [];
-
-    for (const url of urls) {
-      const result = await scanUrlWithVirusTotal(url);
-      if (result.isPhishing) {
-        phishingResults.push({
-          url: url,
-          score: result.threatLevel,
-          source: "VirusTotal",
-        });
-      }
-    }
-
-    const newAlert = new Alert({
-      text,
-      source,
-      phishing_detected: phishingResults.length > 0,
-      phishing_details: phishingResults,
-    });
-
-    await newAlert.save();
-    res.status(201).json(newAlert);
-  } catch (error) {
-    console.error("❌ Failed to ingest alert:", error.message);
-    res.status(500).json({ message: "Failed to create alert." });
-  }
+// Health check
+app.get("/", (req, res) => {
+  res.send("✅ Third Space backend is running");
 });
 
-// ✅ TRIAGE
+// TRIAGE
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
-  console.log("🟢 TRIAGE received alert:", alert);
-
   if (!alert || alert.trim() === "") {
     return res.status(400).json({ result: "Alert is missing." });
   }
@@ -147,7 +94,6 @@ app.post("/api/triage", async (req, res) => {
     });
 
     const reply = completion.choices[0].message.content.trim();
-    console.log("✅ TRIAGE AI response complete.");
     res.json({ result: reply });
   } catch (err) {
     console.error("❌ TRIAGE AI error:", err.message);
@@ -155,11 +101,9 @@ app.post("/api/triage", async (req, res) => {
   }
 });
 
-// ✅ KNOWLEDGE BASE
+// KNOWLEDGE BASE
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
-  console.log("📚 KB received question:", question);
-
   if (!question || question.trim() === "") {
     return res.status(400).json({ result: "Please enter a valid question." });
   }
@@ -173,19 +117,20 @@ app.post("/api/kb", async (req, res) => {
     });
 
     const reply = completion.choices[0].message.content.trim();
-    console.log("✅ KB AI response complete.");
     res.json({ result: reply });
   } catch (err) {
-    console.error("❌ KB AI error:", err.message);
-    res.status(500).json({ result: "AI failed to answer the question." });
+    console.error("❌ KB AI error:", err.response?.data || err.message);
+    res.status(500).json({
+      result:
+        "AI error: " +
+        (err.response?.data?.error?.message || err.message || "Unknown error occurred."),
+    });
   }
 });
 
-// ✅ THREAT INTEL
+// THREAT INTEL
 app.post("/api/threat-intel", async (req, res) => {
   const { keyword } = req.body;
-  console.log("🧠 Threat Intel received keyword:", keyword);
-
   if (!keyword || keyword.trim() === "") {
     return res.status(400).json({ result: "Keyword is missing." });
   }
@@ -199,7 +144,6 @@ app.post("/api/threat-intel", async (req, res) => {
     });
 
     const reply = completion.choices[0].message.content.trim();
-    console.log("✅ Threat Intel AI response complete.");
     res.json({ result: reply });
   } catch (err) {
     console.error("❌ Threat Intel AI error:", err.message);
@@ -207,11 +151,9 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// ✅ TICKETING
+// TICKETING
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
-  console.log("🎫 Ticket request received:", incident);
-
   if (!incident || incident.trim() === "") {
     return res.status(400).json({ result: "Incident description is missing." });
   }
@@ -227,7 +169,6 @@ app.post("/api/ticket", async (req, res) => {
     });
 
     const reply = completion.choices[0].message.content.trim();
-    console.log("✅ Ticket AI response complete.");
     res.json({ result: reply });
   } catch (err) {
     console.error("❌ Ticket AI error:", err.message);
@@ -235,7 +176,7 @@ app.post("/api/ticket", async (req, res) => {
   }
 });
 
-// ✅ Start Server
+// === Start Server ===
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
