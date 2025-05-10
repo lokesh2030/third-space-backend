@@ -132,7 +132,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// ✅ TICKETING (Updated to structured ticket output)
+// ✅ TICKETING (Triage-style formatting)
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
 
@@ -141,13 +141,19 @@ app.post("/api/ticket", async (req, res) => {
   }
 
   const prompt = `
-You are a cybersecurity assistant. Based on the incident description below, generate a professional security incident ticket.
+You are an AI cybersecurity assistant.
 
-Format it like this:
+Given the incident description below, return a structured incident ticket in this exact format:
 
+🔍 Result:
 Subject: [Short summary]
 Body:
-[A 2-3 sentence description of the incident, what happened, and any recommended next steps.]
+[1–2 sentences on what was detected, how, and what the risk is.]
+
+🔧 Remediation Suggestion
+[List 2–3 recommended actions to mitigate or resolve the incident.]
+
+📍 Route to: [Choose from: Security Team, IT Team, Firewall Team, Network Team]
 
 Incident:
 ${incident}
@@ -157,8 +163,8 @@ ${incident}
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      max_tokens: 500,
+      temperature: 0.3,
+      max_tokens: 600,
     });
 
     const reply = completion.choices?.[0]?.message?.content?.trim();
@@ -169,7 +175,7 @@ ${incident}
     res.json({ result: reply });
   } catch (err) {
     console.error("❌ Ticket error:", err.message);
-    res.status(500).json({ result: "AI failed to create a ticket." });
+    res.status(500).json({ result: "AI failed to generate ticket." });
   }
 });
 
