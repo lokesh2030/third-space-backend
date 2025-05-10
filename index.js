@@ -3,137 +3,184 @@ const cors = require("cors");
 const OpenAI = require("openai");
 require("dotenv").config();
 const mongoose = require("mongoose");
+const axios = require("axios");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB connection
+// ✅ MongoDB (optional)
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 🔷 /triage
-app.post("/triage", async (req, res) => {
+// ✅ Load Routes
+const phishingRoute = require("./routes/phishing");
+
+// === Helper Functions ===
+const extractUrls = (text) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
+};
+
+async function scanUrlWithVirusTotal(url) {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  const encodedUrl = Buffer.from(url).toString("base64url");
+  const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
+
+  const response = await axios.get(vtUrl, {
+    headers: { "x-apikey": apiKey },
+  });
+
+  const data = response.data.data;
+  const maliciousVotes = data.attributes.last_analysis_stats.malicious;
+
+  return {
+    isPhishing: maliciousVotes > 0,
+    threatLevel: maliciousVotes > 5 ? "High" : "Medium",
+  };
+}
+
+// === Routes ===
+
+// ✅ PHISHING DETECTION
+app.use("/api/phishing-detect", phishingRoute);
+
+// ✅ HEALTH CHECK
+app.get("/", (req, res) => {
+  res.send("✅ Third Space backend is running");
+});
+
+// ✅ TRIAGE
+app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
+  if (!alert || alert.trim() === "") {
+    return res.status(400).json({ result: "Alert is missing." });
+  }
+
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are a cybersecurity analyst assistant. Analyze the alert and determine if it is suspicious. Respond with:\n\n🔍 Result:\n- Is it suspicious? Yes/No\n- Confidence: (0–1)\n- Reasoning: Brief explanation\n\n🔧 Remediation Suggestion:\n<Action steps>\n\n📍 Route to: <Team>"
-        },
-        { role: "user", content: alert },
-      ],
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: alert }],
       temperature: 0.3,
+      max_tokens: 600,
     });
 
-    res.json({ result: response.choices[0].message.content });
-  } catch (error) {
-    console.error("❌ /triage error:", error);
-    res.status(500).json({ error: "Triage failed" });
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+    if (!reply) {
+      return res.status(500).json({ result: "No response from AI." });
+    }
+
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ TRIAGE error:", err.message);
+    res.status(500).json({ result: "AI failed to analyze the alert." });
   }
 });
 
-// 🔷 /threat-intel
-app.post("/threat-intel", async (req, res) => {
-  const { input } = req.body;
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are a threat intelligence analyst. Given a threat group or IOC, return:\n\n🔍 Threat Summary:\n<TTP overview>\n\n🔧 Recommended Response:\n<Actionable steps>\n\n📍 Route to: <Team>"
-        },
-        { role: "user", content: input },
-      ],
-      temperature: 0.3,
-    });
-
-    res.json({ result: response.choices[0].message.content });
-  } catch (error) {
-    console.error("❌ /threat-intel error:", error);
-    res.status(500).json({ error: "Threat intel failed" });
-  }
-});
-
-// 🔷 /knowledgebase
-app.post("/knowledgebase", async (req, res) => {
+// ✅ KNOWLEDGE BASE
+app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
+
+  if (!question || question.trim() === "") {
+    return res.status(400).json({ result: "Please enter a valid question." });
+  }
+
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are a security knowledge base assistant. Given a question, respond with a brief technical answer."
-        },
-        { role: "user", content: question },
-      ],
-      temperature: 0.3,
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: question }],
     });
 
-    res.json({ result: response.choices[0].message.content });
-  } catch (error) {
-    console.error("❌ /knowledgebase error:", error);
-    res.status(500).json({ error: "Knowledge base failed" });
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+
+    if (!reply) {
+      return res.status(500).json({ result: "No response from AI." });
+    }
+
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ KB error:", err.message);
+    res.status(500).json({ result: "AI failed to answer your question." });
   }
 });
 
-// 🔷 /ticket
-app.post("/ticket", async (req, res) => {
-  const { subject, body } = req.body;
+// ✅ THREAT INTEL
+app.post("/api/threat-intel", async (req, res) => {
+  const { keyword } = req.body;
+  if (!keyword || keyword.trim() === "") {
+    return res.status(400).json({ result: "Keyword is missing." });
+  }
+
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a cybersecurity assistant. Given a subject and description, return:\n\n🔍 Result:\nSubject: <...>\nBody: <summary>\n\n🔧 Remediation Suggestion:\n1. ...\n2. ...\n\n📍 Route to: <Team>"
-        },
-        { role: "user", content: `Subject: ${subject}\n\nDescription: ${body}` },
-      ],
-      temperature: 0.3,
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: keyword }],
     });
 
-    res.json({ result: response.choices[0].message.content });
-  } catch (error) {
-    console.error("❌ /ticket error:", error);
-    res.status(500).json({ error: "Ticketing failed" });
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+    if (!reply) {
+      return res.status(500).json({ result: "No response from AI." });
+    }
+
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ Threat Intel error:", err.message);
+    res.status(500).json({ result: "AI failed to fetch threat intel." });
   }
 });
 
-// 🔷 /phishing
-app.post("/phishing", async (req, res) => {
-  const { email } = req.body;
+// ✅ TICKETING (Triage-style formatting)
+app.post("/api/ticket", async (req, res) => {
+  const { incident } = req.body;
+
+  if (!incident || incident.trim() === "") {
+    return res.status(400).json({ result: "Incident description is missing." });
+  }
+
+  const prompt = `
+You are an AI cybersecurity assistant.
+
+Given the incident description below, return a structured incident ticket in this exact format:
+
+🔍 Result:
+Subject: [Short summary]
+Body:
+[1–2 sentences on what was detected, how, and what the risk is.]
+
+🔧 Remediation Suggestion
+[List 2–3 recommended actions to mitigate or resolve the incident.]
+
+📍 Route to: [Choose from: Security Team, IT Team, Firewall Team, Network Team]
+
+Incident:
+${incident}
+`;
+
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an AI phishing detector. Analyze the email content and respond with:\n\n🔍 Result:\n- Is it suspicious? Yes/No\n- Confidence: (0–1)\n- Reasoning: <explanation>\n\n🔧 Remediation Suggestion:\n<Action>\n\n📍 Route to: IT Team"
-        },
-        { role: "user", content: email },
-      ],
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
+      max_tokens: 600,
     });
 
-    res.json({ result: response.choices[0].message.content });
-  } catch (error) {
-    console.error("❌ /phishing error:", error);
-    res.status(500).json({ error: "Phishing detection failed" });
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+    if (!reply) {
+      return res.status(500).json({ result: "No response from AI." });
+    }
+
+    res.json({ result: reply });
+  } catch (err) {
+    console.error("❌ Ticket error:", err.message);
+    res.status(500).json({ result: "AI failed to generate ticket." });
   }
 });
 
-// ✅ Start the server
+// ✅ Start Server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`✅ Third Space backend running on port ${PORT}`);
 });
