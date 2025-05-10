@@ -141,19 +141,21 @@ app.post("/api/ticket", async (req, res) => {
   }
 
   const prompt = `
-You are an AI cybersecurity assistant.
+You are a cybersecurity SOC assistant. Given the incident description below, generate a clean, enterprise-grade incident report in this format:
 
-Given the incident description below, return a structured incident ticket in this exact format:
+Subject: <Concise summary title>
 
-🔍 Result:
-Subject: [Short summary]
-Body:
-[1–2 sentences on what was detected, how, and what the risk is.]
+Incident Summary:
+<Brief, professional description of the incident, including what was detected, how it was detected, and the potential impact.>
 
-🔧 Remediation Suggestion
-[List 2–3 recommended actions to mitigate or resolve the incident.]
+Recommended Remediation Actions:
+1. <Action 1>
+2. <Action 2>
+3. <Optional Action 3>
 
-📍 Route to: [Choose from: Security Team, IT Team, Firewall Team, Network Team]
+Routing: Security Operations Center (SOC)
+Priority Level: High
+Confidence Level: High
 
 Incident:
 ${incident}
