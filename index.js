@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Optional: MongoDB connection
+// ✅ MongoDB (optional)
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
@@ -68,23 +68,24 @@ User Input:
 }
 
 // === Routes ===
+
 app.get("/", (req, res) => {
   res.send("✅ Third Space backend is running");
 });
 
-// TRIAGE
+// ✅ TRIAGE
 app.post("/api/triage", async (req, res) => {
   const { alert } = req.body;
   if (!alert || alert.trim() === "") {
     return res.status(400).json({ result: "Alert is missing." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: alert, currentPage: "Triage" });
+  const prompt = buildContextPrompt({ userInput: alert, currentPage: "Triage" });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
-      messages: [{ role: "system", content: contextPrompt }],
+      messages: [{ role: "system", content: prompt }],
       temperature: 0.3,
       max_tokens: 600,
     });
@@ -92,80 +93,72 @@ app.post("/api/triage", async (req, res) => {
     const reply = completion.choices[0].message.content.trim();
     res.json({ result: reply });
   } catch (err) {
-    console.error("❌ TRIAGE AI error:", err.message);
+    console.error("❌ TRIAGE error:", err.message);
     res.status(500).json({ result: "AI failed to analyze the alert." });
   }
 });
 
-// KNOWLEDGE BASE (with debug logging)
+// ✅ KNOWLEDGE BASE (Reverted to GPT-3.5)
 app.post("/api/kb", async (req, res) => {
   const { question } = req.body;
-  console.log("📚 KB received question:", question);
-
   if (!question || question.trim() === "") {
     return res.status(400).json({ result: "Please enter a valid question." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: question, currentPage: "KnowledgeBase" });
+  const prompt = buildContextPrompt({ userInput: question, currentPage: "KnowledgeBase" });
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "system", content: contextPrompt }],
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "system", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 500,
     });
 
-    console.log("🔁 GPT KB Raw Response:", JSON.stringify(completion, null, 2));
-
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-    if (!reply) throw new Error("No content in GPT response");
-
+    const reply = completion.choices[0].message.content.trim();
     res.json({ result: reply });
   } catch (err) {
-    console.error("❌ KB AI error:", err.response?.data || err.message);
-    res.status(500).json({
-      result:
-        "AI error: " +
-        (err.response?.data?.error?.message || err.message || "Unknown error occurred."),
-    });
+    console.error("❌ KB error:", err.message);
+    res.status(500).json({ result: "AI failed to answer the question." });
   }
 });
 
-// THREAT INTEL
+// ✅ THREAT INTEL
 app.post("/api/threat-intel", async (req, res) => {
   const { keyword } = req.body;
   if (!keyword || keyword.trim() === "") {
     return res.status(400).json({ result: "Keyword is missing." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: keyword, currentPage: "ThreatIntel" });
+  const prompt = buildContextPrompt({ userInput: keyword, currentPage: "ThreatIntel" });
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "system", content: contextPrompt }],
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "system", content: prompt }],
     });
 
     const reply = completion.choices[0].message.content.trim();
     res.json({ result: reply });
   } catch (err) {
-    console.error("❌ Threat Intel AI error:", err.message);
+    console.error("❌ Threat Intel error:", err.message);
     res.status(500).json({ result: "AI failed to fetch threat intel." });
   }
 });
 
-// TICKETING
+// ✅ TICKETING
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
   if (!incident || incident.trim() === "") {
     return res.status(400).json({ result: "Incident description is missing." });
   }
 
-  const contextPrompt = buildContextPrompt({ userInput: incident, currentPage: "Ticketing" });
+  const prompt = buildContextPrompt({ userInput: incident, currentPage: "Ticketing" });
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
-      messages: [{ role: "system", content: contextPrompt }],
+      messages: [{ role: "system", content: prompt }],
       temperature: 0.2,
       max_tokens: 500,
     });
@@ -173,12 +166,12 @@ app.post("/api/ticket", async (req, res) => {
     const reply = completion.choices[0].message.content.trim();
     res.json({ result: reply });
   } catch (err) {
-    console.error("❌ Ticket AI error:", err.message);
+    console.error("❌ Ticket error:", err.message);
     res.status(500).json({ result: "AI failed to create a ticket." });
   }
 });
 
-// Start server
+// ✅ Start Server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
