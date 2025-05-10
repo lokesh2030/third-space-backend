@@ -132,17 +132,31 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// ✅ TICKETING
+// ✅ TICKETING (Updated to structured ticket output)
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
+
   if (!incident || incident.trim() === "") {
     return res.status(400).json({ result: "Incident description is missing." });
   }
 
+  const prompt = `
+You are a cybersecurity assistant. Based on the incident description below, generate a professional security incident ticket.
+
+Format it like this:
+
+Subject: [Short summary]
+Body:
+[A 2-3 sentence description of the incident, what happened, and any recommended next steps.]
+
+Incident:
+${incident}
+`;
+
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: incident }],
+      messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
       max_tokens: 500,
     });
