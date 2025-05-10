@@ -8,57 +8,132 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MongoDB (optional)
+// ✅ MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ✅ Ticket Route (Previous Working Version)
-app.post("/ticket", async (req, res) => {
-  const { subject, body } = req.body;
-
+// 🔷 /triage
+app.post("/triage", async (req, res) => {
+  const { alert } = req.body;
   try {
-    const completion = await openai.chat.completions.create({
+    const response = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
           role: "system",
-          content: `
-You are a cybersecurity copilot. Given a subject and a short incident description, return a structured output in this format:
-
-🔍 Result:
-Subject: <Concise restatement of the alert subject>
-Body: <Clear, concise summary of the incident and why it's a concern>
-
-🔧 Remediation Suggestion:
-1. <Step 1>
-2. <Step 2>
-3. <Optional Step 3>
-
-📍 Route to: <Relevant team (e.g., Security Team, IT Team, Legal)>
-`
+          content: "You are a cybersecurity analyst assistant. Analyze the alert and determine if it is suspicious. Respond with:\n\n🔍 Result:\n- Is it suspicious? Yes/No\n- Confidence: (0–1)\n- Reasoning: Brief explanation\n\n🔧 Remediation Suggestion:\n<Action steps>\n\n📍 Route to: <Team>"
         },
-        {
-          role: "user",
-          content: `Subject: ${subject}\n\nDescription: ${body}`,
-        },
+        { role: "user", content: alert },
       ],
       temperature: 0.3,
     });
 
-    const result = completion.choices[0].message.content;
-    res.json({ result });
-
+    res.json({ result: response.choices[0].message.content });
   } catch (error) {
-    console.error("❌ Error generating ticket:", error);
-    res.status(500).json({ error: "Failed to generate ticket" });
+    console.error("❌ /triage error:", error);
+    res.status(500).json({ error: "Triage failed" });
   }
 });
 
-// ✅ Start Server
+// 🔷 /threat-intel
+app.post("/threat-intel", async (req, res) => {
+  const { input } = req.body;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are a threat intelligence analyst. Given a threat group or IOC, return:\n\n🔍 Threat Summary:\n<TTP overview>\n\n🔧 Recommended Response:\n<Actionable steps>\n\n📍 Route to: <Team>"
+        },
+        { role: "user", content: input },
+      ],
+      temperature: 0.3,
+    });
+
+    res.json({ result: response.choices[0].message.content });
+  } catch (error) {
+    console.error("❌ /threat-intel error:", error);
+    res.status(500).json({ error: "Threat intel failed" });
+  }
+});
+
+// 🔷 /knowledgebase
+app.post("/knowledgebase", async (req, res) => {
+  const { question } = req.body;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are a security knowledge base assistant. Given a question, respond with a brief technical answer."
+        },
+        { role: "user", content: question },
+      ],
+      temperature: 0.3,
+    });
+
+    res.json({ result: response.choices[0].message.content });
+  } catch (error) {
+    console.error("❌ /knowledgebase error:", error);
+    res.status(500).json({ error: "Knowledge base failed" });
+  }
+});
+
+// 🔷 /ticket
+app.post("/ticket", async (req, res) => {
+  const { subject, body } = req.body;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a cybersecurity assistant. Given a subject and description, return:\n\n🔍 Result:\nSubject: <...>\nBody: <summary>\n\n🔧 Remediation Suggestion:\n1. ...\n2. ...\n\n📍 Route to: <Team>"
+        },
+        { role: "user", content: `Subject: ${subject}\n\nDescription: ${body}` },
+      ],
+      temperature: 0.3,
+    });
+
+    res.json({ result: response.choices[0].message.content });
+  } catch (error) {
+    console.error("❌ /ticket error:", error);
+    res.status(500).json({ error: "Ticketing failed" });
+  }
+});
+
+// 🔷 /phishing
+app.post("/phishing", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an AI phishing detector. Analyze the email content and respond with:\n\n🔍 Result:\n- Is it suspicious? Yes/No\n- Confidence: (0–1)\n- Reasoning: <explanation>\n\n🔧 Remediation Suggestion:\n<Action>\n\n📍 Route to: IT Team"
+        },
+        { role: "user", content: email },
+      ],
+      temperature: 0.3,
+    });
+
+    res.json({ result: response.choices[0].message.content });
+  } catch (error) {
+    console.error("❌ /phishing error:", error);
+    res.status(500).json({ error: "Phishing detection failed" });
+  }
+});
+
+// ✅ Start the server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
