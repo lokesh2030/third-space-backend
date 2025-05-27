@@ -26,6 +26,36 @@ const extractUrls = (text) => {
 };
 
 async function scanUrlWithVirusTotal(url) {
+  async function runAITriage(alertData) {
+  const prompt = `
+An alert has been received with the following details:
+
+Description: ${alertData.description}
+Source: ${alertData.source}
+Severity: ${alertData.severity || 'unknown'}
+Timestamp: ${alertData.timestamp || new Date().toISOString()}
+
+Act as a senior security analyst. Analyze and summarize the alert, classify severity, recommend actions, and determine if it requires ticketing.
+
+Respond in JSON with:
+{
+  "summary": "...",
+  "severity": "...",
+  "recommended_action": "...",
+  "ticket_required": true/false
+}
+`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.3
+  });
+
+  const response = completion.choices?.[0]?.message?.content?.trim();
+  return JSON.parse(response);
+}
+
   const apiKey = process.env.VIRUSTOTAL_API_KEY;
   const encodedUrl = Buffer.from(url).toString("base64url");
   const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
@@ -183,6 +213,23 @@ ${incident}
 
 // ✅ Start Server
 const PORT = process.env.PORT || 3001;
+// ✅ ALERT INGESTION + AI TRIAGE
+app.post("/api/alerts/ingest", async (req, res) => {
+  try {
+    const alertData = req.body;
+
+    // Basic field validation
+    if (!alertData.alert_id || !alertData.description || !alertData.source) {
+      return res.status(400).json({ error: "Missing required alert fields." });
+    }
+
+    const triageResult = await runAITriage(alertData);
+    res.status(200).json({ success: true, triageResult });
+  } catch (err) {
+    console.error("❌ Alert ingestion error:", err.message);
+    res.status(500).json({ error: "AI triage failed." });
+  }
+});
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
 });
