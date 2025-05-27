@@ -26,7 +26,25 @@ const extractUrls = (text) => {
 };
 
 async function scanUrlWithVirusTotal(url) {
-  async function runAITriage(alertData) {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  const encodedUrl = Buffer.from(url).toString("base64url");
+  const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
+
+  const response = await axios.get(vtUrl, {
+    headers: { "x-apikey": apiKey },
+  });
+
+  const data = response.data.data;
+  const maliciousVotes = data.attributes.last_analysis_stats.malicious;
+
+  return {
+    isPhishing: maliciousVotes > 0,
+    threatLevel: maliciousVotes > 5 ? "High" : "Medium",
+  };
+}
+
+// === AI TRIAGE Helper ===
+async function runAITriage(alertData) {
   const prompt = `
 An alert has been received with the following details:
 
@@ -54,23 +72,6 @@ Respond in JSON with:
 
   const response = completion.choices?.[0]?.message?.content?.trim();
   return JSON.parse(response);
-}
-
-  const apiKey = process.env.VIRUSTOTAL_API_KEY;
-  const encodedUrl = Buffer.from(url).toString("base64url");
-  const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
-
-  const response = await axios.get(vtUrl, {
-    headers: { "x-apikey": apiKey },
-  });
-
-  const data = response.data.data;
-  const maliciousVotes = data.attributes.last_analysis_stats.malicious;
-
-  return {
-    isPhishing: maliciousVotes > 0,
-    threatLevel: maliciousVotes > 5 ? "High" : "Medium",
-  };
 }
 
 // === Routes ===
@@ -162,7 +163,7 @@ app.post("/api/threat-intel", async (req, res) => {
   }
 });
 
-// ✅ TICKETING (Triage-style formatting)
+// ✅ TICKETING
 app.post("/api/ticket", async (req, res) => {
   const { incident } = req.body;
 
@@ -211,14 +212,11 @@ ${incident}
   }
 });
 
-// ✅ Start Server
-const PORT = process.env.PORT || 3001;
-// ✅ ALERT INGESTION + AI TRIAGE
+// ✅ ALERT INGESTION + AI TRIAGE (NEW)
 app.post("/api/alerts/ingest", async (req, res) => {
   try {
     const alertData = req.body;
 
-    // Basic field validation
     if (!alertData.alert_id || !alertData.description || !alertData.source) {
       return res.status(400).json({ error: "Missing required alert fields." });
     }
@@ -230,6 +228,9 @@ app.post("/api/alerts/ingest", async (req, res) => {
     res.status(500).json({ error: "AI triage failed." });
   }
 });
+
+// ✅ Start Server
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
 });
