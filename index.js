@@ -43,6 +43,29 @@ async function scanUrlWithVirusTotal(url) {
   };
 }
 
+async function scanIpWithVirusTotal(ip) {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  const vtUrl = `https://www.virustotal.com/api/v3/ip_addresses/${ip}`;
+
+  try {
+    const response = await axios.get(vtUrl, {
+      headers: { "x-apikey": apiKey },
+    });
+
+    const data = response.data.data;
+    const maliciousVotes = data.attributes.last_analysis_stats.malicious;
+
+    return {
+      ip,
+      reputation: maliciousVotes > 5 ? "High Risk" : maliciousVotes > 0 ? "Suspicious" : "Clean",
+      maliciousVotes,
+    };
+  } catch (err) {
+    console.error(`❌ VirusTotal IP scan failed for ${ip}:`, err.message);
+    return { ip, reputation: "Unknown", maliciousVotes: 0 };
+  }
+}
+
 // === AI TRIAGE Helper ===
 async function runAITriage(alertData) {
   const prompt = `
@@ -61,8 +84,7 @@ Respond in JSON with:
   "severity": "...",
   "recommended_action": "...",
   "ticket_required": true/false
-}
-`;
+}`;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4",
@@ -71,7 +93,23 @@ Respond in JSON with:
   });
 
   const response = completion.choices?.[0]?.message?.content?.trim();
-  return JSON.parse(response);
+  const triageResult = JSON.parse(response);
+
+  // 🔍 Extract IP addresses from alert description
+  const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+  const foundIps = alertData.description.match(ipRegex) || [];
+
+  const enrichments = [];
+  for (const ip of foundIps) {
+    const vtResult = await scanIpWithVirusTotal(ip);
+    enrichments.push(vtResult);
+  }
+
+  // Combine and return
+  return {
+    ...triageResult,
+    enrichment: enrichments
+  };
 }
 
 // === Routes ===
@@ -212,7 +250,7 @@ ${incident}
   }
 });
 
-// ✅ ALERT INGESTION + AI TRIAGE (NEW)
+// ✅ ALERT INGESTION + AI TRIAGE
 app.post("/api/alerts/ingest", async (req, res) => {
   try {
     const alertData = req.body;
