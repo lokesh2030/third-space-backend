@@ -19,30 +19,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // ✅ Load Routes
 const phishingRoute = require("./routes/phishing");
 
-// === Helper Functions ===
-const extractUrls = (text) => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.match(urlRegex) || [];
-};
-
-async function scanUrlWithVirusTotal(url) {
-  const apiKey = process.env.VIRUSTOTAL_API_KEY;
-  const encodedUrl = Buffer.from(url).toString("base64url");
-  const vtUrl = `https://www.virustotal.com/api/v3/urls/${encodedUrl}`;
-
-  const response = await axios.get(vtUrl, {
-    headers: { "x-apikey": apiKey },
-  });
-
-  const data = response.data.data;
-  const maliciousVotes = data.attributes.last_analysis_stats.malicious;
-
-  return {
-    isPhishing: maliciousVotes > 0,
-    threatLevel: maliciousVotes > 5 ? "High" : "Medium",
-  };
-}
-
+// === VirusTotal Helpers ===
 async function scanIpWithVirusTotal(ip) {
   const apiKey = process.env.VIRUSTOTAL_API_KEY;
   const vtUrl = `https://www.virustotal.com/api/v3/ip_addresses/${ip}`;
@@ -66,6 +43,7 @@ async function scanIpWithVirusTotal(ip) {
   }
 }
 
+// === AI TRIAGE Function ===
 async function runAITriage(alertData) {
   const prompt = `An alert has been received with the following details:
 Description: ${alertData.description}
@@ -96,16 +74,14 @@ Respond in JSON with:
   const enrichments = [];
 
   if (process.env.USE_VT === "false") {
-  for (const ip of foundIps) {
-    enrichments.push({ ip, reputation: "Unknown", maliciousVotes: 0 });
-  }
-} else {
-  for (const ip of foundIps) {
-    const vtResult = await scanIpWithVirusTotal(ip);
-    enrichments.push(vtResult);
-  }
-}
-
+    for (const ip of foundIps) {
+      enrichments.push({ ip, reputation: "Unknown", maliciousVotes: 0 });
+    }
+  } else {
+    for (const ip of foundIps) {
+      const vtResult = await scanIpWithVirusTotal(ip);
+      enrichments.push(vtResult);
+    }
   }
 
   return {
@@ -254,6 +230,7 @@ Timestamp: ${alertData.timestamp || new Date().toISOString()}`;
   }
 });
 
+// ✅ Start Server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Third Space backend running on port ${PORT}`);
