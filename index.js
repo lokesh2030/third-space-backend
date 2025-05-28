@@ -95,24 +95,20 @@ Respond in JSON with:
   const response = completion.choices?.[0]?.message?.content?.trim();
   const triageResult = JSON.parse(response);
 
-  // 🔍 Extract IP addresses from alert description
   const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
   const foundIps = alertData.description.match(ipRegex) || [];
-
   const enrichments = [];
+
   for (const ip of foundIps) {
     const vtResult = await scanIpWithVirusTotal(ip);
     enrichments.push(vtResult);
   }
 
-  // Combine and return
   return {
     ...triageResult,
     enrichment: enrichments
   };
 }
-
-// === Routes ===
 
 // ✅ PHISHING DETECTION
 app.use("/api/phishing-detect", phishingRoute);
@@ -250,7 +246,7 @@ ${incident}
   }
 });
 
-// ✅ ALERT INGESTION + AI TRIAGE
+// ✅ ALERT INGESTION + AI TRIAGE + AUTO TICKETING
 app.post("/api/alerts/ingest", async (req, res) => {
   try {
     const alertData = req.body;
@@ -260,10 +256,53 @@ app.post("/api/alerts/ingest", async (req, res) => {
     }
 
     const triageResult = await runAITriage(alertData);
-    res.status(200).json({ success: true, triageResult });
+    let ticket = null;
+
+    if (triageResult.ticket_required) {
+      const ticketPrompt = `
+You are a cybersecurity SOC assistant. Based on the following triage summary, create an incident ticket:
+
+Triage Summary:
+${triageResult.summary}
+
+Recommended Action:
+${triageResult.recommended_action}
+
+Source: ${alertData.source}
+Alert ID: ${alertData.alert_id}
+Severity: ${triageResult.severity}
+Timestamp: ${alertData.timestamp || new Date().toISOString()}
+
+Respond in this format:
+Subject: <summary>
+Incident Summary:
+...
+Recommended Remediation Actions:
+1. ...
+2. ...
+Routing: Security Operations Center (SOC)
+Priority Level: High
+Confidence Level: High
+`;
+
+      const ticketCompletion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "user", content: ticketPrompt }],
+        temperature: 0.3,
+        max_tokens: 600,
+      });
+
+      ticket = ticketCompletion.choices?.[0]?.message?.content?.trim();
+    }
+
+    return res.status(200).json({
+      success: true,
+      triageResult,
+      ticket: ticket || null
+    });
   } catch (err) {
     console.error("❌ Alert ingestion error:", err.message);
-    res.status(500).json({ error: "AI triage failed." });
+    res.status(500).json({ error: "AI triage or ticketing failed." });
   }
 });
 
