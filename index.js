@@ -95,9 +95,17 @@ Respond in JSON with:
   const foundIps = alertData.description.match(ipRegex) || [];
   const enrichments = [];
 
+  if (process.env.USE_VT === "false") {
+  for (const ip of foundIps) {
+    enrichments.push({ ip, reputation: "Unknown", maliciousVotes: 0 });
+  }
+} else {
   for (const ip of foundIps) {
     const vtResult = await scanIpWithVirusTotal(ip);
     enrichments.push(vtResult);
+  }
+}
+
   }
 
   return {
